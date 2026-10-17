@@ -2,6 +2,19 @@
 
 A reusable, domain-restricted Google Workspace app for collaborative demo planning, AE approval, document generation, post-demo closeout, and permanent record archiving.
 
+## Start here
+
+| Need | Guide |
+| --- | --- |
+| Install a new instance | [First-time setup](docs/SETUP.md) — resources, source files, setup wrapper, permissions, and first deployment |
+| Prepare, review, and finish a demo | [AE/SE usage guide](docs/USAGE.md) |
+| Configure the sample modules | [Catalog and app reference](apps-script/README.md#supply-your-module-catalog) |
+| Release or update an instance | [Optional GitHub deployment](docs/GITHUB-DEPLOYMENT.md) and [upgrade guide](UPGRADE-GUIDE.md) |
+| Resolve an error | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Protect data or contribute | [Security](docs/SECURITY.md) and [contributing/validation](CONTRIBUTING.md) |
+
+AE means account executive/reviewer; SE means the person preparing the demonstration. This is a shared Workspace team tool. It does not provide per-record visibility controls or a hosted service. A new installation requires your own module catalog and Workspace access; the public source is not a connected demo environment.
+
 ## Deliverables
 
 - `apps-script/` — production Apps Script source and manifest.
@@ -33,6 +46,8 @@ configureDemoPrepSystem({
 
 Replace the placeholders, run setup in your own Apps Script project, and resolve every `runDemoPrepDiagnostics()` problem before deploying. The template ships no connected app, deployment IDs, or credentials. Pushing or merging source does not deploy it; a configured maintainer must explicitly start **Deploy Apps Script**.
 
+For the editor's runnable setup wrapper and complete first-install steps, follow [first-time setup](docs/SETUP.md). The short example above describes the configuration shape; the editor's Run menu cannot pass that argument itself.
+
 ## Intended workflow
 
 1. The SE creates one demo record.
@@ -40,11 +55,11 @@ Replace the placeholders, run setup in your own Apps Script project, and resolve
 3. The AE approves each selected item separately.
 4. The app generates a clean Google Doc containing selected items only.
 5. The SE records post-demo outcomes, follow-ups, and the Gong recording—or explicitly confirms that no recording is available.
-6. Completion refreshes the Google Doc, creates a final PDF, and locks the structured record.
+6. Completion saves and locks the record, refreshes the Google Doc, and creates a final PDF when enabled. Check the resulting links separately; a file-generation failure can occur after the record is saved.
 
 Company-named Drive folders keep the working Doc, final PDF, and related record links together. Google Slides can be attached for AE/SE collaboration. WOW Demo is the default story; Custom Demo opens the complete active module catalog and multi-persona flow controls.
 
 GitHub is the source of truth for application code. The Google Sheet is the source of truth for demo records. Generated Docs and PDFs are shareable outputs and historical snapshots.
 
-For optional GitHub deployment, see `docs/GITHUB-DEPLOYMENT.md`.
-For an existing installation, follow `UPGRADE-GUIDE.md`; browser-based deployment remains available as a fallback.
+For optional GitHub deployment, see [the deployment guide](docs/GITHUB-DEPLOYMENT.md).
+For an existing installation, follow [the upgrade guide](UPGRADE-GUIDE.md); browser-based deployment remains available as a fallback.

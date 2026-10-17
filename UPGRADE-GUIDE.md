@@ -2,6 +2,8 @@
 
 This upgrade preserves existing Sheet records, settings, company folders, and the current web-app URL.
 
+For a new installation, use [first-time setup](docs/SETUP.md). Before upgrading an existing instance, copy the Sheet and retain the current source/deployment version and generated outputs. Test the change on fictional records in a separate instance, especially when changing catalog names or schema. Read [usage limits](docs/USAGE.md#keep-the-record-and-catalog-reliable) before altering active catalog rows.
+
 ## What changes
 
 - Saving a demo creates or reuses a child folder named for the Company Name inside the configured `Generated Demo Records` folder.

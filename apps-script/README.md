@@ -2,6 +2,8 @@
 
 This package deploys a domain-restricted Apps Script web app backed by your own Google Sheet. The app is the source of truth; it generates a clean Google Doc for AE review and a final PDF snapshot when a demo is completed.
 
+Start with [first-time setup](../docs/SETUP.md) or the [AE/SE usage guide](../docs/USAGE.md). For errors, see [troubleshooting](../docs/TROUBLESHOOTING.md).
+
 ## Included behavior
 
 - One permanent record per demo
@@ -41,7 +43,24 @@ A fresh setup seeds only the optional `SUP_ADMIN_VIEW` (Admin View) row. This so
 | `TI_CALIBRATION` | Calibration |
 | `CAP_AI` | AI capabilities |
 
-Use the catalog headers created by setup. Set `Enabled` to true and active dates that include today. `PM_CONVERSATIONS` supplies both conversation story steps. To demonstrate another product, replace the sample `wowModuleIds`, `wowFlowSteps`, `wowDefaults`, and persona in `Config.gs` together with your catalog. Until you supply that catalog, the fresh template does not offer the six sample modules; the configured WOW story alone does not create them.
+Use these setup-created catalog columns in this exact order:
+
+| Column | What to enter |
+| --- | --- |
+| `Module ID` | Unique, stable identifier matching `Config.gs` for the standard story. |
+| `Display Name` | Stable, unique name shown in the app and saved with selections. |
+| `Product Area` | Your grouping label, such as Performance or Integrations. |
+| `Item Type` | Descriptive label, such as Module, Capability, or Optional view. |
+| `Active From` | A Sheet date/time on or before use; blank means no start restriction. |
+| `Active To` | A Sheet date/time on or after use; blank means no end restriction. |
+| `Display Order` | Positive numeric sort order; for example 10, 20, 30. |
+| `Enabled` | Boolean `TRUE` to offer the row; `FALSE` to hide it from the active catalog. |
+| `Source URL` | Optional approved reference URL; leave blank for a generic example. |
+| `Evidence` | Optional maintenance note about the row's source or purpose. |
+
+For a first fictional test, add the six rows above, choose your grouping/type labels, leave both active-date columns blank, use display order 10 through 60, and set each `Enabled` cell to `TRUE`. Leave Source URL/Evidence blank unless useful. `PM_CONVERSATIONS` supplies both conversation story steps. Setup does not overwrite existing catalog rows with the same ID.
+
+To demonstrate another product, replace the sample `wowModuleIds`, `wowFlowSteps`, `wowDefaults`, and persona in `Config.gs` together with your catalog. Until you supply that catalog, the fresh template does not offer the six sample modules; the configured WOW story alone does not create them. Diagnostics reports a catalog count but does not check these required IDs.
 
 ## Company filing behavior
 
@@ -73,5 +92,5 @@ Schema upgrades are additive and automatic. On app bootstrap, save, document gen
 ## Operational notes
 
 - Keep the Sheet, template Doc, archive folder, and Apps Script project under a stable team-owned Workspace account or Shared Drive governance process.
-- Update the `Module Catalog` tab instead of editing module names in application code. Completed records preserve the names and selections captured at that time.
+- Keep used module IDs/display names stable. Stored selections are matched by display name against the current active catalog; renaming, disabling, expiring, or removing a row can affect older record rendering. Evaluate changes on a copy and retain generated snapshots.
 - Use `reopenDemo(demoId, reason)` only for an explicit correction; the action is written to the audit log.

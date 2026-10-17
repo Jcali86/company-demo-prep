@@ -13,11 +13,13 @@ There is no browser copy-and-paste step in this release flow.
 
 ## One-time connection
 
-First complete the company and Workspace setup in the root `README.md`. Preserve the manifest's `DOMAIN` access and `USER_ACCESSING` execution. The optional deploy workflow needs your own Apps Script project and deployment IDs plus clasp authorization for that project. Reusing source does not authorize access to another instance.
+First complete [first-time setup](SETUP.md), including your first domain-restricted web-app deployment. Preserve the manifest's `DOMAIN` access and `USER_ACCESSING` execution. The optional deploy workflow needs your own Apps Script project and deployment IDs plus clasp authorization for that project. Reusing source does not authorize access to another instance.
 
 ### Automated setup
 
-From a local copy of the repository that has already run `automation/setup-clasp.command`:
+From a local copy of the repository:
+
+On a Mac, run `bash automation/setup-clasp.command` once after creating the first deployment. It asks for the Script ID from your project's settings, authorizes clasp through your browser, lists your existing deployments, and asks which deployment ID to preserve. It writes ignored local connection files; it does not upload this source or create the initial deployment. Use the same Node.js 22-or-later environment described in [setup](SETUP.md).
 
 1. Select your destination explicitly: run `GITHUB_REPOSITORY=OWNER/company-demo-prep bash automation/finish-github-setup.command`, replacing `OWNER` with your GitHub account or organization. Both setup helpers also accept `OWNER/REPO` as their first argument. If downloaded separately, replace the script path with its full local path.
 2. Complete the GitHub browser sign-in when it opens.
