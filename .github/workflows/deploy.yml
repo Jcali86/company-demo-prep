@@ -1,0 +1,80 @@
+name: Deploy Apps Script
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-script-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate and deploy production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+
+    steps:
+      # actions/checkout v7.0.1
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-node v7.0.0
+      - name: Use Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Validate Apps Script project
+        run: |
+          node automation/validate.mjs
+          node automation/test-deployment.mjs
+          node automation/test-configure-github.mjs
+
+      - name: Configure clasp securely
+        env:
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+          APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+          CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS }}
+        run: |
+          missing=()
+          [ -n "$APPS_SCRIPT_ID" ] || missing+=(APPS_SCRIPT_ID)
+          [ -n "$APPS_SCRIPT_DEPLOYMENT_ID" ] || missing+=(APPS_SCRIPT_DEPLOYMENT_ID)
+          [ -n "$CLASP_CREDENTIALS" ] || missing+=(CLASP_CREDENTIALS)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing repository secrets: ${missing[*]}. See docs/GITHUB-DEPLOYMENT.md."
+            exit 1
+          fi
+
+          if ! printf '%s' "$APPS_SCRIPT_ID" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then
+            echo "::error::APPS_SCRIPT_ID is not valid."
+            exit 1
+          fi
+          if ! printf '%s' "$APPS_SCRIPT_DEPLOYMENT_ID" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then
+            echo "::error::APPS_SCRIPT_DEPLOYMENT_ID is not valid."
+            exit 1
+          fi
+
+          umask 077
+          printf '%s' "$CLASP_CREDENTIALS" > "$HOME/.clasprc.json"
+          node -e "JSON.parse(require('node:fs').readFileSync(process.env.HOME + '/.clasprc.json', 'utf8'))"
+          printf '{\n  "scriptId": "%s",\n  "rootDir": "apps-script"\n}\n' "$APPS_SCRIPT_ID" > .clasp.json
+
+      - name: Deploy the existing web app
+        env:
+          APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+          CLASP_PACKAGE: "@google/clasp@3.3.0"
+          NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
+          RELEASE_DESCRIPTION: '[insert company here] Demo Prep — GitHub ${{ github.sha }} — run ${{ github.run_number }}'
+        run: bash automation/deploy-apps-script.sh
+
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.json

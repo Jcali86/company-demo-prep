@@ -1,0 +1,12 @@
+.clasp.json
+.clasp-deployment-id
+.clasprc.json
+node_modules/
+.DS_Store
+*.inspect.ndjson
+*.xlsx
+*.docx
+assets/
+docs/BRAND-SYSTEM.md
+docs/previews/
+MODULE-CATALOG-SOURCES.md

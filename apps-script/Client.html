@@ -1,0 +1,557 @@
+<script>
+  (() => {
+    const state = { bootstrap: null, record: null };
+    const form = document.getElementById('demo-form');
+    const message = document.getElementById('message');
+
+    function server(method, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(error => reject(new Error(error.message || error)))[method](...args);
+      });
+    }
+
+    function setMessage(text, type) {
+      message.textContent = text || '';
+      message.className = type || '';
+    }
+
+    function setAuthorizationMessage(result) {
+      message.textContent = '';
+      message.className = 'error';
+      message.appendChild(document.createTextNode((result.errorMessage || 'Email permission is required.') + ' '));
+      const link = document.createElement('a');
+      link.href = result.authorizationUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Authorize email notifications';
+      message.appendChild(link);
+    }
+
+    function setBusy(busy) {
+      const locked = state.record && state.record.demo && state.record.demo.status === 'Complete';
+      form.querySelectorAll('button').forEach(button => {
+        if (busy) {
+          if (!Object.prototype.hasOwnProperty.call(button.dataset, 'disabledBeforeBusy')) {
+            button.dataset.disabledBeforeBusy = button.disabled ? 'true' : 'false';
+          }
+          button.disabled = true;
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(button.dataset, 'disabledBeforeBusy')) {
+          button.disabled = button.dataset.disabledBeforeBusy === 'true';
+          delete button.dataset.disabledBeforeBusy;
+        }
+        if (locked || button.dataset.permissionDisabled === 'true') button.disabled = true;
+      });
+    }
+
+    async function load(demoId) {
+      document.getElementById('loading').hidden = false;
+      form.hidden = true;
+      try {
+        state.bootstrap = await server('getAppBootstrap', demoId || '');
+        state.record = state.bootstrap.record;
+        renderPicker();
+        renderRecord();
+        document.getElementById('identity').textContent = state.bootstrap.userEmail;
+        document.getElementById('loading').hidden = true;
+        form.hidden = false;
+      } catch (error) {
+        document.getElementById('loading').textContent = error.message;
+      }
+    }
+
+    function renderPicker() {
+      const picker = document.getElementById('record-picker');
+      picker.innerHTML = '<option value="">New demo</option>';
+      state.bootstrap.demos.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.demoId;
+        option.textContent = `${item.company} — ${item.demoDateTime ? item.demoDateTime.slice(0, 10) : 'No date'} — ${item.status}`;
+        option.selected = item.demoId === state.record.demo.demoId;
+        picker.appendChild(option);
+      });
+    }
+
+    function renderRecord() {
+      const demo = state.record.demo;
+      if (demo.status !== 'Complete') {
+        form.querySelectorAll('input, select, textarea, button').forEach(control => { control.disabled = false; });
+      }
+      ['company', 'demoDateTime', 'duration', 'aeEmail', 'seEmail', 'opportunityUrl', 'slidesUrl', 'meetingObjective', 'aeNotes', 'runOfShow', 'handoffs', 'whatLanded', 'questionsObjections', 'nextStep', 'gongUrl'].forEach(name => {
+        form.elements[name].value = demo[name] || '';
+      });
+      const mode = demo.demoMode || 'WOW Demo';
+      const modeControl = form.querySelector(`input[name="demoMode"][value="${mode}"]`);
+      if (modeControl) modeControl.checked = true;
+      form.elements.useMultiplePersonas.checked = Boolean(demo.useMultiplePersonas);
+      form.elements.noGongRecording.checked = Boolean(demo.noGongRecording);
+      document.getElementById('status-badge').textContent = demo.status || 'Draft';
+      renderPersonas();
+      renderModules();
+      renderFlow();
+      renderFollowUps();
+      renderLinks();
+      applyLockedState();
+      updateGongControls_();
+    }
+
+    function applyLockedState() {
+      const locked = state.record.demo.status === 'Complete';
+      if (!locked) return;
+      form.querySelectorAll('input, select, textarea, button').forEach(control => { control.disabled = true; });
+    }
+
+    function currentMode() {
+      const selected = form.querySelector('input[name="demoMode"]:checked');
+      return selected ? selected.value : 'WOW Demo';
+    }
+
+    function wowDefinition_() {
+      return state.bootstrap.wowDefinition || { moduleIds: [], flowSteps: [], defaults: {} };
+    }
+
+    function wowModuleIds_() {
+      return wowDefinition_().moduleIds || [];
+    }
+
+    function isWowModule_(item) {
+      return wowModuleIds_().indexOf(item.moduleId) >= 0;
+    }
+
+    function renderPersonas() {
+      const container = document.getElementById('personas');
+      const personas = Array.isArray(state.record.demo.personas) && state.record.demo.personas.length ? state.record.demo.personas : ['Finance Manager'];
+      container.innerHTML = '';
+      personas.forEach((persona, index) => addPersonaRow(persona, index));
+      updatePersonaControls();
+    }
+
+    function addPersonaRow(value = '', index) {
+      const container = document.getElementById('personas');
+      const row = document.createElement('div');
+      row.className = 'persona-row';
+      row.innerHTML = `
+        <span class="persona-number">${index == null ? container.children.length + 1 : index + 1}</span>
+        <label><span class="sr-only">Persona</span><input class="persona-name" value="${escapeHtml(value)}" placeholder="e.g. Finance Manager"></label>
+        <button type="button" class="secondary remove-persona">Remove</button>`;
+      row.querySelector('.remove-persona').addEventListener('click', () => {
+        row.remove();
+        renumberPersonas();
+        updatePersonaControls();
+        renderFlow();
+      });
+      row.querySelector('.persona-name').addEventListener('input', renderFlow);
+      container.appendChild(row);
+      updatePersonaControls();
+    }
+
+    function renumberPersonas() {
+      document.querySelectorAll('.persona-row .persona-number').forEach((node, index) => { node.textContent = index + 1; });
+    }
+
+    function updatePersonaControls() {
+      const multiple = form.elements.useMultiplePersonas.checked;
+      const rows = Array.from(document.querySelectorAll('.persona-row'));
+      document.getElementById('add-persona').hidden = !multiple;
+      rows.forEach((row, index) => { row.querySelector('.remove-persona').hidden = !multiple || index === 0; });
+      while (!multiple && rows.length > 1) rows.pop().remove();
+    }
+
+    function renderModules() {
+      const container = document.getElementById('module-groups');
+      container.innerHTML = '';
+      const mode = currentMode();
+      if (mode === 'WOW Demo') ensureWowDefaults_();
+      const visible = (mode === 'WOW Demo'
+        ? state.record.modules.filter(item => isWowModule_(item) || item.displayName === 'Admin View')
+        : state.record.modules).slice();
+      if (mode === 'WOW Demo') {
+        visible.sort((a, b) => {
+          const aIndex = isWowModule_(a) ? wowModuleIds_().indexOf(a.moduleId) : wowModuleIds_().length;
+          const bIndex = isWowModule_(b) ? wowModuleIds_().indexOf(b.moduleId) : wowModuleIds_().length;
+          return aIndex - bIndex;
+        });
+      }
+      document.getElementById('module-guidance').textContent = mode === 'WOW Demo'
+        ? 'The standard WOW story includes Home, Goals, Anytime and Scheduled Conversations, Outlook/Gmail integration, Succession, Calibration, and AI. Admin View remains optional.'
+        : 'Select the modules for the tailored story. Selection and AE approval are separate.';
+      const groups = {};
+      visible.forEach(item => { (groups[item.productArea] ||= []).push(item); });
+      Object.keys(groups).forEach(area => {
+        const group = document.createElement('div');
+        group.className = 'module-group';
+        group.innerHTML = `<h3>${escapeHtml(area)}</h3>`;
+        groups[area].forEach(item => group.appendChild(moduleElement(item, mode === 'WOW Demo' && isWowModule_(item))));
+        container.appendChild(group);
+      });
+    }
+
+    function ensureWowDefaults_() {
+      const definition = wowDefinition_();
+      const defaults = definition.defaults || {};
+      definition.moduleIds.forEach((moduleId, index) => {
+        const item = state.record.modules.find(module => module.moduleId === moduleId);
+        if (!item) return;
+        const standard = defaults[moduleId] || {};
+        item.selected = true;
+        item.flowOrder = index + 1;
+        ['whyShow', 'prospectGoal', 'intendedOutcome', 'minutes', 'setupNotes'].forEach(field => {
+          if ((item[field] == null || item[field] === '') && standard[field] != null) item[field] = standard[field];
+        });
+      });
+      state.record.modules.filter(item => item.selected && !isWowModule_(item)).forEach((item, index) => {
+        item.flowOrder = definition.moduleIds.length + index + 1;
+      });
+    }
+
+    function moduleElement(item, fixed) {
+      if (fixed) item.selected = true;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'module-item' + (item.selected ? ' selected' : '');
+      wrapper.dataset.moduleId = item.moduleId;
+      const canApprove = state.bootstrap.userEmail.toLowerCase() === String(state.record.demo.aeEmail || '').toLowerCase();
+      wrapper.innerHTML = `
+        <div class="module-head">
+          <label class="module-choice">
+            <input type="checkbox" class="module-selected" ${item.selected ? 'checked' : ''} ${fixed ? 'disabled' : ''}>
+            <span class="module-copy"><span class="module-title">${escapeHtml(item.displayName)}</span><span class="module-type">${escapeHtml(item.itemType)}</span></span>
+          </label>
+          <label class="approval-choice"><input type="checkbox" class="module-approved" ${item.aeApproved ? 'checked' : ''} ${canApprove && item.selected ? '' : 'disabled'}><span>AE approved</span></label>
+        </div>
+        <div class="module-details">
+          <div class="grid three">
+            <label>Why show it?<textarea class="why-show" rows="4">${escapeHtml(item.whyShow)}</textarea></label>
+            <label>Prospect goal<textarea class="prospect-goal" rows="4">${escapeHtml(item.prospectGoal)}</textarea></label>
+            <label>Intended outcome<textarea class="intended-outcome" rows="4">${escapeHtml(item.intendedOutcome)}</textarea></label>
+          </div>
+          <div class="grid two">
+            <label>Minutes<input class="minutes" type="number" min="0" step="1" value="${escapeHtml(item.minutes)}"></label>
+            <label>Setup notes<textarea class="setup-notes" rows="2">${escapeHtml(item.setupNotes)}</textarea></label>
+          </div>
+        </div>`;
+      const selection = wrapper.querySelector('.module-selected');
+      const approval = wrapper.querySelector('.module-approved');
+      selection.addEventListener('change', event => {
+        item.selected = event.target.checked;
+        if (!item.selected) {
+          item.aeApproved = false;
+          approval.checked = false;
+        }
+        approval.disabled = !canApprove || !item.selected;
+        wrapper.classList.toggle('selected', item.selected);
+        normalizeFlowOrder_();
+        renderFlow();
+      });
+      approval.addEventListener('change', event => { item.aeApproved = event.target.checked; renderFlow(); });
+      wrapper.querySelectorAll('textarea, input[type="number"]').forEach(control => control.addEventListener('input', () => syncModuleElement_(wrapper, item)));
+      return wrapper;
+    }
+
+    function syncModuleElement_(row, item) {
+      if (!row || !item) return;
+      item.selected = row.querySelector('.module-selected').checked;
+      item.aeApproved = row.querySelector('.module-approved').checked;
+      item.whyShow = row.querySelector('.why-show').value;
+      item.prospectGoal = row.querySelector('.prospect-goal').value;
+      item.intendedOutcome = row.querySelector('.intended-outcome').value;
+      item.minutes = row.querySelector('.minutes').value;
+      item.setupNotes = row.querySelector('.setup-notes').value;
+    }
+
+    function syncVisibleModules_() {
+      const byId = {};
+      state.record.modules.forEach(item => { byId[item.moduleId] = item; });
+      form.querySelectorAll('.module-item').forEach(row => syncModuleElement_(row, byId[row.dataset.moduleId]));
+    }
+
+    function selectedModules_() {
+      return state.record.modules.filter(item => item.selected).sort((a, b) => Number(a.flowOrder || 9999) - Number(b.flowOrder || 9999));
+    }
+
+    function normalizeFlowOrder_() {
+      selectedModules_().forEach((item, index) => { item.flowOrder = index + 1; });
+    }
+
+    function renderFlow() {
+      syncVisibleModules_();
+      normalizeFlowOrder_();
+      const container = document.getElementById('demo-flow');
+      container.innerHTML = '';
+      const personas = collectPersonas_();
+      const mode = currentMode();
+      const selected = selectedModules_();
+      if (mode === 'WOW Demo') {
+        const definition = wowDefinition_();
+        const byModuleId = {};
+        selected.forEach(item => { byModuleId[item.moduleId] = item; });
+        definition.flowSteps.forEach((step, index) => {
+          container.appendChild(wowFlowCard_(step, index, step.moduleId ? byModuleId[step.moduleId] : null, personas));
+        });
+        selected.filter(item => !isWowModule_(item)).forEach((item, index) => {
+          container.appendChild(wowFlowCard_({ displayName: item.displayName }, definition.flowSteps.length + index, item, personas));
+        });
+        return;
+      }
+      if (!selected.length) {
+        container.innerHTML = '<p class="empty-state">Select a module to build the demo flow.</p>';
+        return;
+      }
+      selected.forEach((item, index) => container.appendChild(flowCard_(item, index, selected.length, false, personas)));
+    }
+
+    function wowFlowCard_(step, index, item, personas) {
+      const card = document.createElement('div');
+      const approved = Boolean(step.standard || (item && item.aeApproved));
+      card.className = 'flow-card';
+      card.innerHTML = `
+        <span class="flow-order">${index + 1}</span>
+        <div class="flow-copy"><strong>${escapeHtml(step.displayName)}</strong><span>${escapeHtml(personas.join(' → ') || 'Persona not set')}</span></div>
+        <span class="flow-status ${approved ? 'approved' : 'pending'}">${step.standard ? 'Standard step' : approved ? 'AE approved' : 'Pending approval'}</span>
+        <div class="flow-actions"></div>`;
+      return card;
+    }
+
+    function flowCard_(item, index, total, fixed, personas) {
+      const card = document.createElement('div');
+      card.className = 'flow-card';
+      const displayedOrder = fixed ? 1 : index + 1;
+      card.innerHTML = `
+        <span class="flow-order">${displayedOrder}</span>
+        <div class="flow-copy"><strong>${escapeHtml(item.displayName)}</strong><span>${escapeHtml(personas.join(' → ') || 'Persona not set')}</span></div>
+        <span class="flow-status ${item.aeApproved ? 'approved' : 'pending'}">${fixed ? 'Standard step' : item.aeApproved ? 'AE approved' : 'Pending approval'}</span>
+        <div class="flow-actions">
+          <button type="button" class="icon-button move-up" aria-label="Move ${escapeHtml(item.displayName)} up" ${fixed || index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="icon-button move-down" aria-label="Move ${escapeHtml(item.displayName)} down" ${fixed || index === total - 1 ? 'disabled' : ''}>↓</button>
+        </div>`;
+      if (!fixed) {
+        card.querySelector('.move-up').addEventListener('click', () => moveFlowItem_(index, -1));
+        card.querySelector('.move-down').addEventListener('click', () => moveFlowItem_(index, 1));
+      }
+      return card;
+    }
+
+    function moveFlowItem_(index, delta) {
+      syncVisibleModules_();
+      const selected = selectedModules_();
+      const target = index + delta;
+      if (target < 0 || target >= selected.length) return;
+      [selected[index], selected[target]] = [selected[target], selected[index]];
+      selected.forEach((item, position) => { item.flowOrder = position + 1; });
+      renderFlow();
+    }
+
+    function renderFollowUps() {
+      const container = document.getElementById('follow-ups');
+      container.innerHTML = '';
+      state.record.followUps.forEach(addFollowUpRow);
+    }
+
+    function addFollowUpRow(item = {}) {
+      const row = document.createElement('div');
+      row.className = 'follow-row';
+      row.innerHTML = `
+        <label>Action<input class="follow-action" value="${escapeHtml(item.action || '')}"></label>
+        <label>Owner<input class="follow-owner" type="email" value="${escapeHtml(item.ownerEmail || '')}"></label>
+        <label>Due date<input class="follow-due" type="date" value="${escapeHtml(item.dueDate || '')}"></label>
+        <label>Status<select class="follow-status"><option>Open</option><option>In Progress</option><option>Done</option></select></label>
+        <button type="button" class="secondary remove-follow">Remove</button>`;
+      row.querySelector('.follow-status').value = item.status || 'Open';
+      row.querySelector('.remove-follow').addEventListener('click', () => row.remove());
+      document.getElementById('follow-ups').appendChild(row);
+    }
+
+    function collectPersonas_() {
+      return Array.from(document.querySelectorAll('.persona-name')).map(input => input.value.trim()).filter(Boolean);
+    }
+
+    function collectPayload() {
+      syncVisibleModules_();
+      normalizeFlowOrder_();
+      const demo = Object.assign({}, state.record.demo);
+      ['company', 'demoDateTime', 'duration', 'aeEmail', 'seEmail', 'opportunityUrl', 'slidesUrl', 'meetingObjective', 'aeNotes', 'runOfShow', 'handoffs', 'whatLanded', 'questionsObjections', 'nextStep', 'gongUrl'].forEach(name => { demo[name] = form.elements[name].value; });
+      demo.demoMode = currentMode();
+      demo.useMultiplePersonas = form.elements.useMultiplePersonas.checked;
+      demo.noGongRecording = form.elements.noGongRecording.checked;
+      demo.personas = collectPersonas_();
+      const followUps = Array.from(form.querySelectorAll('.follow-row')).map(row => ({
+        action: row.querySelector('.follow-action').value,
+        ownerEmail: row.querySelector('.follow-owner').value,
+        dueDate: row.querySelector('.follow-due').value,
+        status: row.querySelector('.follow-status').value,
+        notes: ''
+      }));
+      return { demo, modules: state.record.modules.map(item => Object.assign({}, item)), followUps };
+    }
+
+    async function save(status) {
+      setBusy(true);
+      setMessage('Saving…');
+      try {
+        state.record = await server('saveDemo', collectPayload(), status);
+        document.getElementById('status-badge').textContent = state.record.demo.status;
+        renderModules();
+        renderFlow();
+        setMessage('Saved. Company files will be kept in its Drive folder.', 'success');
+        await refreshPickerOnly();
+        renderLinks();
+        return true;
+      } catch (error) {
+        setMessage(error.message, 'error');
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function requestAeReview() {
+      setBusy(true);
+      setMessage('Preparing the working Doc and sending the AE review request…');
+      try {
+        const result = await server('requestAeReview', collectPayload());
+        state.record = result.record;
+        renderRecord();
+        await refreshPickerOnly();
+        if (result.notificationSent) {
+          setMessage(`AE review request sent to ${state.record.demo.aeEmail}.`, 'success');
+        } else if (result.authorizationRequired && result.authorizationUrl) {
+          setAuthorizationMessage(result);
+        } else {
+          setMessage(result.errorMessage || 'The record was saved for AE review, but the notification was not sent.', 'error');
+        }
+      } catch (error) {
+        setMessage(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function refreshPickerOnly() {
+      const bootstrap = await server('getAppBootstrap', state.record.demo.demoId);
+      state.bootstrap.demos = bootstrap.demos;
+      state.bootstrap.userEmail = bootstrap.userEmail;
+      renderPicker();
+    }
+
+    async function generateDoc() {
+      const saved = await save(state.record.demo.status || 'Draft');
+      if (!saved || !state.record.demo.demoId) return;
+      setBusy(true);
+      setMessage('Generating Google Doc…');
+      try {
+        const result = await server('generateOrRefreshDemoDocument', state.record.demo.demoId);
+        state.record.demo.workingDocUrl = result.documentUrl;
+        renderLinks();
+        setMessage('Google Doc generated in the company folder.', 'success');
+      } catch (error) {
+        setMessage(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function complete() {
+      const gongUrl = form.elements.gongUrl.value.trim();
+      const noGong = form.elements.noGongRecording.checked;
+      if (!gongUrl && !noGong) {
+        setMessage('Add the Gong URL or confirm that no Gong recording is available before completing.', 'error');
+        document.querySelector('.completion-evidence').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        form.elements.gongUrl.focus();
+        return;
+      }
+      if (!confirm(`Complete and lock this demo record${noGong ? ' without a Gong recording' : ' with the Gong recording linked'}?`)) return;
+      setBusy(true);
+      setMessage('Completing record and creating final archive…');
+      try {
+        const result = await server('completeDemo', collectPayload());
+        state.record = result.record;
+        renderRecord();
+        setMessage('Demo record completed in the company folder.', 'success');
+      } catch (error) {
+        setMessage(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderLinks() {
+      const links = document.getElementById('record-links');
+      links.innerHTML = '';
+      const demo = state.record.demo;
+      [
+        [demo.companyFolderUrl, 'Company folder'],
+        [demo.slidesUrl, 'Collaborative Slides'],
+        [demo.gongUrl, 'Gong recording'],
+        [demo.workingDocUrl, 'Generated Google Doc'],
+        [demo.finalPdfUrl, 'Final PDF']
+      ].forEach(([url, label]) => {
+        if (!url) return;
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = label;
+        links.appendChild(link);
+      });
+    }
+
+    function updateGongControls_() {
+      const evidence = document.querySelector('.completion-evidence');
+      const gongInput = form.elements.gongUrl;
+      const noGong = form.elements.noGongRecording;
+      const locked = state.record && state.record.demo && state.record.demo.status === 'Complete';
+      gongInput.disabled = locked || noGong.checked;
+      evidence.classList.toggle('no-recording', noGong.checked);
+      evidence.classList.toggle('has-recording', Boolean(gongInput.value.trim()));
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    document.querySelectorAll('input[name="demoMode"]').forEach(control => control.addEventListener('change', event => {
+      if (event.target.value === 'WOW Demo') {
+        const customSelections = state.record.modules.filter(item => item.selected && !isWowModule_(item) && item.displayName !== 'Admin View');
+        if (customSelections.length && !confirm('Switching to WOW Demo will clear the custom module selections. Continue?')) {
+          form.querySelector('input[name="demoMode"][value="Custom Demo"]').checked = true;
+          return;
+        }
+        state.record.modules.forEach(item => {
+          if (!isWowModule_(item) && item.displayName !== 'Admin View') {
+            item.selected = false;
+            item.aeApproved = false;
+          }
+          if (isWowModule_(item)) item.selected = true;
+        });
+        ensureWowDefaults_();
+      }
+      state.record.demo.demoMode = currentMode();
+      renderModules();
+      renderFlow();
+    }));
+    form.elements.useMultiplePersonas.addEventListener('change', () => {
+      state.record.demo.useMultiplePersonas = form.elements.useMultiplePersonas.checked;
+      updatePersonaControls();
+      renderFlow();
+    });
+    form.elements.noGongRecording.addEventListener('change', () => {
+      if (form.elements.noGongRecording.checked) form.elements.gongUrl.value = '';
+      updateGongControls_();
+    });
+    form.elements.gongUrl.addEventListener('input', () => {
+      if (form.elements.gongUrl.value.trim()) form.elements.noGongRecording.checked = false;
+      updateGongControls_();
+    });
+    document.getElementById('add-persona').addEventListener('click', () => addPersonaRow(''));
+    document.getElementById('record-picker').addEventListener('change', event => load(event.target.value));
+    document.getElementById('new-demo').addEventListener('click', () => load(''));
+    document.getElementById('add-follow-up').addEventListener('click', () => addFollowUpRow());
+    document.querySelectorAll('[data-save]').forEach(button => button.addEventListener('click', () => {
+      if (button.dataset.save === 'AE Review') requestAeReview();
+      else save(button.dataset.save);
+    }));
+    document.getElementById('generate-doc').addEventListener('click', generateDoc);
+    document.getElementById('complete-demo').addEventListener('click', complete);
+    load(window.INITIAL_DEMO_ID || '');
+  })();
+</script>

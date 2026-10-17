@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-lockup">
+        <span class="brand-company"><?= companyName ?></span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <div class="brand-copy">
+          <span class="product-eyebrow">Collaborative workspace</span>
+          <h1>Demo Prep</h1>
+        </div>
+      </div>
+      <div class="header-tools">
+        <p id="identity" class="identity-pill">Loading Workspace identity…</p>
+        <div class="header-actions">
+          <label for="record-picker" class="sr-only">Open demo record</label>
+          <select id="record-picker"><option value="">New demo</option></select>
+          <button type="button" class="header-button" id="new-demo">New demo</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="app" aria-live="polite">
+      <div id="loading" class="loading-card"><span class="loading-mark" aria-hidden="true"></span>Loading demo prep…</div>
+      <form id="demo-form" hidden>
+        <section class="section summary-section">
+          <div class="section-heading">
+            <span class="section-number">01</span>
+            <div><h2>Demo overview</h2><p>Start with the opportunity, people, and outcome.</p></div>
+            <span id="status-badge" class="badge">Draft</span>
+          </div>
+          <div class="grid two">
+            <label>Company name<input name="company" required></label>
+            <label>Demo date and time<input name="demoDateTime" type="datetime-local"></label>
+            <label>Demo length<select name="duration"><option>30 minutes</option><option>60+ minutes</option></select></label>
+            <label>Opportunity URL<input name="opportunityUrl" type="url" placeholder="https://…"></label>
+            <label>AE email<input name="aeEmail" type="email"></label>
+            <label>SE email<input name="seEmail" type="email"></label>
+          </div>
+          <label>Collaborative Google Slides<input name="slidesUrl" type="url" placeholder="https://docs.google.com/presentation/d/…"></label>
+          <label>Meeting objective<textarea name="meetingObjective" rows="3" placeholder="What must this demo accomplish?"></textarea></label>
+          <label>AE notes<textarea name="aeNotes" rows="4" placeholder="Discovery context, stakeholders, priorities, risks, language to use or avoid"></textarea></label>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <span class="section-number">02</span>
+            <div><h2>Demo approach and personas</h2><p>Use the proven WOW story or create a tailored narrative.</p></div>
+          </div>
+          <div class="approach-grid">
+            <label class="choice-card"><input type="radio" name="demoMode" value="WOW Demo"><span><strong>WOW Demo</strong><small>Finance Manager story: Home, Goals, Conversations, Outlook/Gmail integration, Succession, Calibration, and AI.</small></span></label>
+            <label class="choice-card"><input type="radio" name="demoMode" value="Custom Demo"><span><strong>Custom Demo</strong><small>Open the full module catalog and build a tailored story.</small></span></label>
+          </div>
+          <label class="inline-check"><input type="checkbox" name="useMultiplePersonas">Use more than one persona</label>
+          <div class="section-title-row persona-heading"><h3>Personas</h3><button type="button" class="secondary" id="add-persona">Add persona</button></div>
+          <div id="personas"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <span class="section-number">03</span>
+            <div><h2>Module agreement</h2><p>Choose what earns its place in the prospect story.</p></div>
+          </div>
+          <p id="module-guidance" class="muted"></p>
+          <div id="module-groups"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <span class="section-number">04</span>
+            <div><h2>Demo plan and process</h2><p>Turn the approved scope into a clear, sequenced story.</p></div>
+          </div>
+          <p class="muted">The plan is built automatically from the selected scope. Use the arrow controls to position each step in the story.</p>
+          <div id="demo-flow"></div>
+          <div class="grid two">
+            <label>Additional run-of-show notes<textarea name="runOfShow" rows="6" placeholder="Opening, discovery confirmation, transitions, recap"></textarea></label>
+            <label>AE / SE handoffs<textarea name="handoffs" rows="6" placeholder="Who opens, watches chat, handles commercials, and closes?"></textarea></label>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <span class="section-number">05</span>
+            <div><h2>Post-demo closeout</h2><p>Capture the signal, evidence, and next move while it is fresh.</p></div>
+          </div>
+          <div class="grid two">
+            <label>What landed<textarea name="whatLanded" rows="5" placeholder="Reactions, moments of value, confirmed priorities"></textarea></label>
+            <label>Questions and objections<textarea name="questionsObjections" rows="5" placeholder="Questions, objections, and unanswered items"></textarea></label>
+          </div>
+          <label>Recommended next step<textarea name="nextStep" rows="3" placeholder="What should happen next?"></textarea></label>
+          <div class="completion-evidence">
+            <div class="evidence-heading">
+              <div>
+                <h3>Demo recording</h3>
+                <p>Add the Gong recording before completing the record, or confirm that no recording is available.</p>
+              </div>
+              <span class="completion-required">Required to complete</span>
+            </div>
+            <div class="gong-controls">
+              <label>Gong URL<input name="gongUrl" type="url" inputmode="url" placeholder="https://app.gong.io/call…" aria-describedby="gong-help"></label>
+              <label class="no-gong-choice"><input type="checkbox" name="noGongRecording"><span><strong>No Gong recording available</strong><small>Allow manual completion for demos that were not recorded.</small></span></label>
+            </div>
+            <p id="gong-help" class="field-help">Choose one completion path. The Gong link will be included in the finalized record.</p>
+          </div>
+          <div class="section-title-row"><h3>Follow-up actions</h3><button type="button" class="secondary" id="add-follow-up">Add action</button></div>
+          <div id="follow-ups"></div>
+        </section>
+
+        <section class="action-bar">
+          <div id="message" role="status"></div>
+          <div class="button-row">
+            <button type="button" class="secondary" data-save="Draft">Save draft</button>
+            <button type="button" class="secondary" data-save="AE Review">Request AE review</button>
+            <button type="button" class="secondary" data-save="Approved">Mark approved</button>
+            <button type="button" class="secondary" id="generate-doc">Generate / refresh Doc</button>
+            <button type="button" class="primary" id="complete-demo">Complete and archive</button>
+          </div>
+          <div id="record-links" class="record-links"></div>
+        </section>
+      </form>
+    </main>
+    <script>window.INITIAL_DEMO_ID = <?!= JSON.stringify(demoId) ?>;</script>
+    <?!= include('Client'); ?>
+  </body>
+</html>
